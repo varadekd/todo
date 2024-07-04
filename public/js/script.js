@@ -1,5 +1,5 @@
 // Change this as per production
-const apiUrl = 'http://localhost:3000/api/todos';
+const apiUrl = `${window.location.origin}/api/todos`;
 
 async function fetchTodos() {
     try {
