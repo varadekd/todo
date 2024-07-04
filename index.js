@@ -13,7 +13,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const db = mysql.createConnection({
     host: 'localhost',
-    user: 'root',
+    user: 'root', // Update with your MySQL username
     password: 'password', // Update with your MySQL password
     database: 'todo_db'
 });
@@ -22,7 +22,7 @@ const db = mysql.createConnection({
 db.connect(err => {
     if (err) {
         console.error('Error connecting to MySQL:', err);
-        return;
+        process.exit(1); // Exit the process with failure code
     }
     console.log('MySQL connected...');
 
@@ -30,7 +30,7 @@ db.connect(err => {
     db.query('CREATE DATABASE IF NOT EXISTS todo_db', err => {
         if (err) {
             console.error('Error creating database:', err);
-            return;
+            process.exit(1); // Exit the process with failure code
         }
         console.log('Database created or already exists.');
 
@@ -38,7 +38,7 @@ db.connect(err => {
         db.query('USE todo_db', err => {
             if (err) {
                 console.error('Error using database:', err);
-                return;
+                process.exit(1); // Exit the process with failure code
             }
 
             // Create table if not exists
@@ -52,7 +52,7 @@ db.connect(err => {
             db.query(createTableQuery, err => {
                 if (err) {
                     console.error('Error creating table:', err);
-                    return;
+                    process.exit(1); // Exit the process with failure code
                 }
                 console.log('Table created or already exists.');
             });
@@ -65,8 +65,11 @@ app.post('/api/todos', (req, res) => {
     const { title } = req.body;
     const sql = 'INSERT INTO todos (title) VALUES (?)';
     db.query(sql, [title], (err, result) => {
-        if (err) throw err;
-        res.send({ id: result.insertId, title, completed: false });
+        if (err) {
+            console.error('Error inserting new todo:', err);
+            return res.status(500).json({ error: 'Failed to create TODO' });
+        }
+        res.status(201).json({ id: result.insertId, title, completed: false });
     });
 });
 
@@ -74,8 +77,11 @@ app.post('/api/todos', (req, res) => {
 app.get('/api/todos', (req, res) => {
     const sql = 'SELECT * FROM todos';
     db.query(sql, (err, results) => {
-        if (err) throw err;
-        res.send(results);
+        if (err) {
+            console.error('Error fetching todos:', err);
+            return res.status(500).json({ error: 'Failed to fetch TODOs' });
+        }
+        res.status(200).json(results);
     });
 });
 
@@ -85,8 +91,14 @@ app.put('/api/todos/:id', (req, res) => {
     const { title, completed } = req.body;
     const sql = 'UPDATE todos SET title = ?, completed = ? WHERE id = ?';
     db.query(sql, [title, completed, id], (err, result) => {
-        if (err) throw err;
-        res.send(result);
+        if (err) {
+            console.error('Error updating todo:', err);
+            return res.status(500).json({ error: 'Failed to update TODO' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'TODO not found' });
+        }
+        res.status(200).json({ message: 'TODO updated successfully' });
     });
 });
 
@@ -95,9 +107,33 @@ app.delete('/api/todos/:id', (req, res) => {
     const { id } = req.params;
     const sql = 'DELETE FROM todos WHERE id = ?';
     db.query(sql, [id], (err, result) => {
-        if (err) throw err;
-        res.send(result);
+        if (err) {
+            console.error('Error deleting todo:', err);
+            return res.status(500).json({ error: 'Failed to delete TODO' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'TODO not found' });
+        }
+        res.status(200).json({ message: 'TODO deleted successfully' });
     });
+});
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Unexpected error:', err);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+    process.exit(1); // Exit the process with failure code
+});
+
+// Uncaught exception and unhandled rejection handling
+process.on('uncaughtException', err => {
+    console.error('Uncaught Exception:', err);
+    process.exit(1); // Exit the process with failure code
+});
+
+process.on('unhandledRejection', err => {
+    console.error('Unhandled Rejection:', err);
+    process.exit(1); // Exit the process with failure code
 });
 
 app.listen(port, () => {
